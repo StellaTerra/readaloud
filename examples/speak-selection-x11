@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+readaloud="${HOME}/.local/bin/readaloud"
+status="$("$readaloud" status 2>/dev/null || true)"
+
+if [[ "$status" == *'"state": "waiting"'* ||
+      "$status" == *'"state": "speaking"'* ]]; then
+    "$readaloud" cancel >/dev/null 2>&1
+    exit 0
+fi
+
+text="$(/usr/bin/xclip -o -selection primary 2>/dev/null || true)"
+
+if [[ -z "${text//[[:space:]]/}" ]]; then
+    "$readaloud" cancel >/dev/null 2>&1
+    exit 0
+fi
+
+printf '%s' "$text" | "$readaloud" speak >/dev/null 2>&1

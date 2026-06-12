@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "voices": [
+    {
+      "name": "en_US-lessac-high",
+      "model_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/high/en_US-lessac-high.onnx",
+      "model_sha256": "4cabf7c3a638017137f34a1516522032d4fe3f38228a843cc9b764ddcbcd9e09",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/high/en_US-lessac-high.onnx.json",
+      "config_sha256": "db42b97d9859f257bc1561b8ed980e7fb2398402050a74ddd6cbec931a92412f",
+      "model_card_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/high/MODEL_CARD",
+      "license": "Lessac Blizzard 2013 voice dataset license"
+    }
+  ]
+}
