@@ -81,9 +81,21 @@ Bind `~/.local/bin/speak-selection` in the desktop's keyboard settings. The
 wrapper uses absolute paths where desktop shortcut environments commonly have
 a restricted `PATH`.
 
-Wayland does not provide one universal selection API. On wlroots compositors,
-an equivalent wrapper can replace the `xclip` command with `wl-paste
---primary`; GNOME and other environments may require compositor-specific
+On Wayland compositors that implement the primary-selection and data-control
+protocols, including COSMIC, use the `wl-clipboard` wrapper:
+
+```sh
+install -Dm755 examples/speak-selection-wayland \
+    "$HOME/.local/bin/speak-selection"
+```
+
+Bind `~/.local/bin/speak-selection` in the compositor's keyboard settings. On
+COSMIC, add a custom shortcut under **Input Devices > Keyboard > Keyboard
+Shortcuts**. The wrapper uses `wl-paste --primary --type text`; applications
+must publish their selection through the Wayland primary-selection protocol.
+
+Wayland does not provide one universal selection API. Compositors without
+primary-selection or data-control support may require compositor-specific
 clipboard tooling or a portal-aware helper. The socket protocol and service do
 not otherwise depend on X11 or Wayland.
 
