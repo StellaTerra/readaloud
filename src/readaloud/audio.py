@@ -29,7 +29,7 @@ class AudioPlayer:
             backend = "pipewire" if shutil.which("pw-play") else "pulse"
         if backend == "pipewire" and shutil.which("pw-play"):
             return [
-                "pw-play", "--rate", str(audio.sample_rate),
+                "pw-play", "--raw", "--rate", str(audio.sample_rate),
                 "--channels", str(audio.channels), "--format", "s16",
                 "--volume", str(min(1.0, self.volume)), "--latency", "50ms", "-",
             ]
