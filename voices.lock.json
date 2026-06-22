@@ -18,6 +18,15 @@
       "config_sha256": "6c2db7f558a4a8deb9fe822583c1c5105f6c4e834dd0f9de8ad17a888ee9fe1d",
       "model_card_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/norman/medium/MODEL_CARD",
       "license": "Public domain (LibriVox recordings)"
+    },
+    {
+      "name": "en_US-ryan-high",
+      "model_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx",
+      "model_sha256": "b3990d7606e183ec8dbfba70a4607074f162de1a0c412e0180d1ff60bb154eca",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx.json",
+      "config_sha256": "b40193912d8f4af041f2f3e9f7ff23d45b63a1c15a9c7d35fcbebeab3c4273b2",
+      "model_card_url": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/MODEL_CARD",
+      "license": "CC BY-NC-SA 4.0"
     }
   ]
 }
