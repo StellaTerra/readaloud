@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass
 
 from readaloud.config import Config
-from readaloud.engine import SpeechEngine
+from readaloud.engine import SpeechEngine, split_speech_units
 
 
 @dataclass
@@ -15,16 +15,23 @@ class Chunk:
 
 
 class Voice:
-    def __init__(self, gate: threading.Event | None = None) -> None:
+    def __init__(
+        self,
+        gate: threading.Event | None = None,
+        *,
+        suffix_chunk: bytes | None = b"-stale",
+    ) -> None:
         self.calls: list[str] = []
         self.gate = gate
+        self.suffix_chunk = suffix_chunk
 
     def synthesize(self, text: str, syn_config: object):
         self.calls.append(text)
         yield Chunk(text.encode())
         if self.gate:
             self.gate.wait(1)
-        yield Chunk(b"-stale")
+        if self.suffix_chunk is not None:
+            yield Chunk(self.suffix_chunk)
 
 
 class Player:
@@ -55,17 +62,57 @@ def wait_idle(engine: SpeechEngine) -> None:
         time.sleep(0.005)
 
 
-def test_passage_uses_one_voice_and_one_player() -> None:
+def wait_for(predicate) -> None:
+    deadline = time.monotonic() + 1
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert predicate()
+
+
+def test_split_speech_units_splits_clear_sentence_endings() -> None:
+    assert split_speech_units("First. Second? Third!") == [
+        "First.",
+        "Second?",
+        "Third!",
+    ]
+
+
+def test_split_speech_units_splits_blank_paragraphs() -> None:
+    assert split_speech_units("First paragraph\n\nSecond paragraph") == [
+        "First paragraph",
+        "Second paragraph",
+    ]
+
+
+def test_split_speech_units_keeps_abbreviations_and_initialisms() -> None:
+    assert split_speech_units("Dr. Smith visited the U.S. Embassy. He left.") == [
+        "Dr. Smith visited the U.S. Embassy.",
+        "He left.",
+    ]
+    assert split_speech_units("Use e.g. apples, oranges, etc. for examples.") == [
+        "Use e.g. apples, oranges, etc. for examples."
+    ]
+
+
+def test_split_speech_units_handles_quotes_and_brackets() -> None:
+    assert split_speech_units('She said "Go!" (Then left.) Next?') == [
+        'She said "Go!"',
+        "(Then left.)",
+        "Next?",
+    ]
+
+
+def test_passage_uses_per_sentence_voice_calls_and_one_player() -> None:
     Player.instances.clear()
-    voice = Voice()
+    voice = Voice(suffix_chunk=None)
     engine = SpeechEngine(
         voice, Config(sentence_silence=0), lambda _: object(), Player
     )
     engine.speak("First. Second.")
     wait_idle(engine)
-    assert voice.calls == ["First. Second."]
+    assert voice.calls == ["First.", "Second."]
     assert len(Player.instances) == 1
-    assert Player.instances[0].data == b"First. Second.-stale"
+    assert Player.instances[0].data == b"First.Second."
     assert Player.instances[0].finished
 
 
@@ -77,9 +124,7 @@ def test_replacement_cancels_player_and_discards_stale_audio() -> None:
         voice, Config(sentence_silence=0), lambda _: object(), Player
     )
     engine.speak("old")
-    deadline = time.monotonic() + 1
-    while not Player.instances and time.monotonic() < deadline:
-        time.sleep(0.005)
+    wait_for(lambda: Player.instances)
     engine.speak("new")
     assert Player.instances[0].cancelled
     gate.set()
@@ -92,12 +137,13 @@ def test_empty_text_cancels() -> None:
     Player.instances.clear()
     gate = threading.Event()
     engine = SpeechEngine(
-        Voice(gate), Config(sentence_silence=0), lambda _: object(), Player
+        Voice(gate),
+        Config(sentence_silence=0),
+        lambda _: object(),
+        Player,
     )
     engine.speak("active")
-    deadline = time.monotonic() + 1
-    while not Player.instances and time.monotonic() < deadline:
-        time.sleep(0.005)
+    wait_for(lambda: Player.instances)
     engine.speak(" \n ")
     gate.set()
     assert engine.status().state == "idle"
@@ -119,12 +165,89 @@ def test_sentence_silence_is_written_to_same_stream() -> None:
 
 def test_sentence_boundaries_remain_aligned_for_default_silence() -> None:
     Player.instances.clear()
-    voice = Voice()
+    voice = Voice(suffix_chunk=None)
     engine = SpeechEngine(voice, Config(), lambda _: object(), Player)
     engine.speak("First. Second.")
     wait_idle(engine)
     silence_size = round(22050 * Config().sentence_silence) * 2
     assert silence_size == 2204
-    assert Player.instances[0].data == (
-        b"First. Second." + bytes(silence_size) + b"-stale"
+    assert Player.instances[0].data == b"First." + bytes(silence_size) + b"Second."
+
+
+def test_synthesizes_next_unit_while_first_audio_is_still_writing() -> None:
+    class SlowFirstWritePlayer(Player):
+        first_write_started = threading.Event()
+        release_first_write = threading.Event()
+
+        def write(self, data: bytes) -> None:
+            if not self.data:
+                self.first_write_started.set()
+                self.release_first_write.wait(1)
+            super().write(data)
+
+    Player.instances.clear()
+    SlowFirstWritePlayer.first_write_started.clear()
+    SlowFirstWritePlayer.release_first_write.clear()
+    voice = Voice(suffix_chunk=None)
+    engine = SpeechEngine(
+        voice, Config(sentence_silence=0), lambda _: object(), SlowFirstWritePlayer
     )
+    engine.speak("First. Second.")
+    wait_for(lambda: SlowFirstWritePlayer.first_write_started.is_set())
+    wait_for(lambda: voice.calls == ["First.", "Second."])
+    assert not Player.instances[0].finished
+    SlowFirstWritePlayer.release_first_write.set()
+    wait_idle(engine)
+
+
+def test_cancel_after_blocking_synthesis_discards_stale_audio() -> None:
+    class BlockingVoice(Voice):
+        entered = threading.Event()
+        release = threading.Event()
+
+        def synthesize(self, text: str, syn_config: object):
+            self.calls.append(text)
+            self.entered.set()
+            self.release.wait(1)
+            yield Chunk(text.encode())
+
+    Player.instances.clear()
+    BlockingVoice.entered.clear()
+    BlockingVoice.release.clear()
+    voice = BlockingVoice(suffix_chunk=None)
+    engine = SpeechEngine(
+        voice, Config(sentence_silence=0), lambda _: object(), Player
+    )
+    engine.speak("old")
+    wait_for(lambda: BlockingVoice.entered.is_set())
+    engine.cancel()
+    BlockingVoice.release.set()
+    wait_idle(engine)
+    assert Player.instances == []
+
+
+def test_queue_limit_prevents_synthesizing_all_units_far_ahead() -> None:
+    class SlowFirstWritePlayer(Player):
+        first_write_started = threading.Event()
+        release_first_write = threading.Event()
+
+        def write(self, data: bytes) -> None:
+            if not self.data:
+                self.first_write_started.set()
+                self.release_first_write.wait(1)
+            super().write(data)
+
+    Player.instances.clear()
+    SlowFirstWritePlayer.first_write_started.clear()
+    SlowFirstWritePlayer.release_first_write.clear()
+    voice = Voice(suffix_chunk=None)
+    engine = SpeechEngine(
+        voice, Config(sentence_silence=0), lambda _: object(), SlowFirstWritePlayer
+    )
+    engine.speak("One. Two. Three. Four.")
+    wait_for(lambda: SlowFirstWritePlayer.first_write_started.is_set())
+    time.sleep(0.05)
+    assert voice.calls == ["One.", "Two.", "Three."]
+    SlowFirstWritePlayer.release_first_write.set()
+    wait_idle(engine)
+    assert voice.calls == ["One.", "Two.", "Three.", "Four."]
