@@ -10,7 +10,8 @@ from typing import Any
 
 from .config import Config, load
 from .engine import SpeechEngine
-from .paths import runtime_dir, socket_path, voices_dir
+from .paths import socket_path
+from .piper_runtime import load_voice
 from .protocol import MAX_REQUEST_BYTES, decode, encode
 from .voices import model_path
 
@@ -18,12 +19,12 @@ LOG = logging.getLogger("readaloud")
 
 
 def load_piper(config: Config, voice_file: Path | None = None) -> tuple[Any, Any]:
-    from piper import PiperVoice, SynthesisConfig
+    from piper import SynthesisConfig
 
     path = voice_file or model_path(config.voice)
     if not path.is_file() or not path.with_suffix(".onnx.json").is_file():
         raise RuntimeError(f"voice is not installed: {config.voice} ({path})")
-    voice = PiperVoice.load(str(path))
+    voice = load_voice(path, config)
 
     def synthesis_config(current: Config) -> SynthesisConfig:
         return SynthesisConfig(
@@ -61,11 +62,16 @@ class Server:
                     "generation": status.generation,
                     "error": status.error,
                     "voice": self.config.voice,
+                    "execution_provider": self.config.execution_provider,
                 }
             else:
                 updated = load()
                 if updated.voice != self.config.voice:
                     raise RuntimeError("voice changes require a service restart")
+                if updated.execution_provider != self.config.execution_provider:
+                    raise RuntimeError(
+                        "execution provider changes require a service restart"
+                    )
                 self.config = updated
                 self.engine.config = updated
                 response = {"ok": True}

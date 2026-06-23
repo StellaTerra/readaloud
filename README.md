@@ -43,6 +43,22 @@ Configuration is stored at
 `$XDG_CONFIG_HOME/readaloud/config.toml`. Rate uses a `-100..100` scale and maps
 to Piper's `length_scale` as `0.8 / (1 + rate / 100)`, clamped to `0.35..4.0`.
 
+Piper inference defaults to ONNX Runtime's CPU provider. The
+`execution_provider` setting can be changed to `cpu`, `openvino-auto`, or
+`openvino-gpu`, but provider changes require a service restart:
+
+```sh
+readaloud config set execution_provider cpu
+systemctl --user restart readaloud.service
+```
+
+The OpenVINO providers are experimental. They make the execution provider
+replaceable and can use Intel GPU runtimes when available, but current Piper
+voice models may be much slower on OpenVINO GPU than on CPU because of model
+compilation and dynamic input shapes. Use `readaloud doctor` to see the
+configured provider and the ONNX Runtime providers available in the installed
+environment.
+
 The socket protocol is newline-delimited JSON at
 `$XDG_RUNTIME_DIR/readaloud/control.sock`. Requests include `"version": 1` and
 one of the `speak`, `cancel`, `status`, or `reload` commands. Requests are

@@ -20,6 +20,7 @@ class Config:
     sentence_silence: float = 0.05
     volume: float = 1.0
     audio_backend: str = "auto"
+    execution_provider: str = "cpu"
 
     @property
     def length_scale(self) -> float:
@@ -36,6 +37,7 @@ FIELDS = {
     "sentence_silence": (int, float),
     "volume": (int, float),
     "audio_backend": str,
+    "execution_provider": str,
 }
 
 
@@ -50,6 +52,10 @@ def validate(config: Config) -> Config:
         raise ValueError("volume must be from 0 to 2")
     if config.audio_backend not in {"auto", "pipewire", "pulse"}:
         raise ValueError("audio_backend must be auto, pipewire, or pulse")
+    if config.execution_provider not in {"openvino-gpu", "openvino-auto", "cpu"}:
+        raise ValueError(
+            "execution_provider must be openvino-gpu, openvino-auto, or cpu"
+        )
     return config
 
 

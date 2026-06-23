@@ -45,9 +45,19 @@ def doctor() -> int:
     try:
         config = load()
         print(f"config: ok ({config_path()})")
+        print(f"execution provider: {config.execution_provider}")
     except (OSError, ValueError) as error:
         problems.append(f"config: {error}")
         config = None
+    try:
+        import onnxruntime
+
+        print(
+            "onnxruntime providers: "
+            + ", ".join(onnxruntime.get_available_providers())
+        )
+    except Exception as error:
+        problems.append(f"onnxruntime: {error}")
     for program in ("systemctl",):
         if not shutil.which(program):
             problems.append(f"missing host command: {program}")

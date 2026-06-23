@@ -15,7 +15,13 @@ def test_rate_mapping(rate: int, expected: float) -> None:
 
 def test_config_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
-    expected = Config(voice="voice", rate=-20, sentence_silence=0.2, volume=0.8)
+    expected = Config(
+        voice="voice",
+        rate=-20,
+        sentence_silence=0.2,
+        volume=0.8,
+        execution_provider="cpu",
+    )
     save(expected, path)
     assert load(path) == expected
     assert path.stat().st_mode & 0o777 == 0o600
@@ -28,3 +34,13 @@ def test_invalid_config_is_rejected(tmp_path: Path) -> None:
         load(path)
     with pytest.raises(ValueError):
         set_value(Config(), "rate", "-101")
+    with pytest.raises(ValueError):
+        set_value(Config(), "execution_provider", "cuda")
+
+
+def test_execution_provider_default_and_set() -> None:
+    assert Config().execution_provider == "cpu"
+    assert (
+        set_value(Config(), "execution_provider", "openvino-gpu").execution_provider
+        == "openvino-gpu"
+    )
